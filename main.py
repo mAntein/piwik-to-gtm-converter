@@ -21,8 +21,8 @@ async def convert_piwik_gtm(file: UploadFile = File(...)):
 
     # Extract containerVersion once to avoid redundant lookups and extracting correct accountId and containerId
     container_version = piwik_json.get('containerVersion', {})
-    account_id = str(container_version.get('accountId', "0"))  # Default to "0" if not found
-    container_id = str(container_version.get('containerId', "0"))  # Default to "0" if not found
+    account_id = str(container_version.get('accountId', "0"))
+    container_id = str(container_version.get('containerId', "0"))
 
     # Ensure IDs are numeric, otherwise set default to 0
     if not account_id.isdigit():
@@ -46,23 +46,43 @@ async def convert_piwik_gtm(file: UploadFile = File(...)):
                 "publicId": "GTM-XXXX",
                 "usageContext": ["WEB"]
             },
-            "tag": [], "trigger": [], "variable": [
+            "tag": [], 
+            "trigger": [],
+            "variable": [
                 {"name": "Page Hostname", "type": "PAGE_HOSTNAME"},
                 {"name": "Page Path", "type": "PAGE_PATH"},
                 {"name": "Page URL", "type": "PAGE_URL"},
                 {"name": "Referrer", "type": "REFERRER"}
-            ], "folder": []
+            ], 
+            "folder": []
         }
     }
 
+    trigger_mapping = {}
+    for trigger_index, (trigger_id, trigger) in enumerate(piwik_json.get('triggers', {}).items()):
+        trigger_name = trigger.get('attributes', {}).get('name', f"Trigger {trigger_index + 1}")
+        gtm_json['containerVersion']['trigger'].append({
+            "accountId": account_id,
+            "containerId": container_id,
+            "triggerId": str(trigger_index + 1),
+            "name": trigger_name,
+            "type": trigger.get("attributes", {}).get("type", "custom_event"),
+            "filter": []
+        })
+        trigger_mapping[trigger_id] = str(trigger_index + 1)
+
+    # Convert Piwik tags to GTM tags
     for index, (tag_id, tag) in enumerate(piwik_json.get('tags', {}).items()):
+        gtm_trigger_ids = tag.get('triggers', [])
+        converted_trigger_ids = [trigger_mapping.get(tid, "1") for tid in gtm_trigger_ids]
+
         gtm_json['containerVersion']['tag'].append({
             "accountId": account_id,
             "containerId": container_id,
             "name": tag['attributes']['name'],
             "type": "html",
             "parameter": [{"type": "TEMPLATE", "key": "html", "value": tag['attributes']['code']}],
-            "firingTriggerId": [str(trigger_index + 1) for trigger_index, _ in enumerate(tag.get('triggers', []))],
+            "firingTriggerId": converted_trigger_ids,
             "tagId": str(index + 1)
         })
 
