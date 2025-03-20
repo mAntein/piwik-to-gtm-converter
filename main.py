@@ -1,9 +1,11 @@
-rom fastapi.middleware.cors import CORSMiddleware
+import os
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import StreamingResponse
 import json
 from datetime import datetime
 from io import BytesIO
+import uvicorn
 
 app = FastAPI()
 
@@ -15,6 +17,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Root endpoint to confirm API is running
 @app.get("/")
 def home():
     return {"message": "Piwik to GTM Converter API is running!"}
@@ -125,3 +128,6 @@ async def convert_piwik_gtm(file: UploadFile = File(...)):
         media_type="application/json",
         headers={"Content-Disposition": "attachment; filename=gtm_export.json"}
     )
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8000)))
