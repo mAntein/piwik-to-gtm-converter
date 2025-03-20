@@ -19,18 +19,16 @@ app.add_middleware(
 async def convert_piwik_gtm(file: UploadFile = File(...)):
     piwik_json = json.loads(await file.read())
 
- # Extract containerVersion once to avoid redundant lookups and extracting correct accountId and containerId
-container_version = piwik_json.get('containerVersion', {})
-account_id = str(container_version.get('accountId', "0"))  # Default to "0" if not found
-container_id = str(container_version.get('containerId', "0"))  # Default to "0" if not found
+    # Extract containerVersion once to avoid redundant lookups and extracting correct accountId and containerId
+    container_version = piwik_json.get('containerVersion', {})
+    account_id = str(container_version.get('accountId', "0"))  # Default to "0" if not found
+    container_id = str(container_version.get('containerId', "0"))  # Default to "0" if not found
 
-# Ensure IDs are numeric, otherwise set default to 0
-if not account_id.isdigit():
-    account_id = "0"
-if not container_id.isdigit():
-    container_id = "0"
-
-
+    # Ensure IDs are numeric, otherwise set default to 0
+    if not account_id.isdigit():
+        account_id = "0"
+    if not container_id.isdigit():
+        container_id = "0"
 
     gtm_json = {
         "exportFormatVersion": 2,
