@@ -58,15 +58,28 @@ async def convert_piwik_gtm(file: UploadFile = File(...)):
         }
     }
 
+    # Convert Piwik triggers to GTM triggers
     trigger_mapping = {}
     for trigger_index, (trigger_id, trigger) in enumerate(piwik_json.get('triggers', {}).items()):
         trigger_name = trigger.get('attributes', {}).get('name', f"Trigger {trigger_index + 1}")
+        piwik_event_type = trigger.get("attributes", {}).get("type", "custom_event")
+
+        # Map Piwik PRO event types to GTM-compatible event types
+        event_type_mapping = {
+            "event": "custom_event",
+            "page_view": "page_view",
+            "click": "click",
+            "form_submit": "form_submission"
+        }
+        
+        gtm_event_type = event_type_mapping.get(piwik_event_type, "custom_event")
+
         gtm_json['containerVersion']['trigger'].append({
             "accountId": account_id,
             "containerId": container_id,
             "triggerId": str(trigger_index + 1),
             "name": trigger_name,
-            "type": trigger.get("attributes", {}).get("type", "custom_event"),
+            "type": gtm_event_type,
             "filter": []
         })
         trigger_mapping[trigger_id] = str(trigger_index + 1)
