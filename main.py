@@ -9,11 +9,16 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Root endpoint to confirm the API is running
+@app.get("/")
+def home():
+    return {"message": "Piwik to GTM Converter API is running!"}
 
 # GTM Constants
 GTM_EVENT_TYPES = {
