@@ -50,7 +50,7 @@ async def convert_piwik_gtm(file: UploadFile = File(...)):
         }
     }
 
-    for tag_id, tag in piwik_json.get('tags', {}).items():
+    for index, (tag_id, tag) in enumerate(piwik_json.get('tags', {}).items()):
         gtm_json['containerVersion']['tag'].append({
             "accountId": account_id,
             "containerId": container_id,
@@ -58,7 +58,7 @@ async def convert_piwik_gtm(file: UploadFile = File(...)):
             "type": "html",
             "parameter": [{"type": "TEMPLATE", "key": "html", "value": tag['attributes']['code']}],
             "firingTriggerId": tag.get('triggers', []),
-            "tagId": str(abs(hash(tag_id)))[:10]
+            "tagId": str(index + 1)
         })
 
     output_stream = BytesIO()
