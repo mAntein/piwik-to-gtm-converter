@@ -1,5 +1,5 @@
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import StreamingResponse
 import json
 from datetime import datetime
@@ -9,106 +9,155 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# GTM Constants
+GTM_EVENT_TYPES = {
+    "pageview": "pageView",
+    "click": "click",
+    "submit": "formSubmit",
+    "history_change": "historyChange",
+    "custom_event": "customEvent"
+}
+
+GTM_VARIABLE_TYPES = {
+    "text": "v",
+    "url": "u",
+    "data_layer": "d"
+}
+
+def map_piwik_condition_to_gtm_filter(piwik_condition: dict) -> dict:
+    """Convert Piwik Pro trigger conditions to GTM filters."""
+    # Example Piwik condition: {"type": "url_contains", "value": "checkout"}
+    # GTM filter format: https://developers.google.com/tag-manager/api/v2/reference/accounts/containers/workspaces/triggers
+    condition_type = piwik_condition.get("type", "")
+    value = piwik_condition.get("value", "")
+    
+    if condition_type == "url_contains":
+        return {
+            "type": "CONTAINS",
+            "parameter": [
+                {"type": "TEMPLATE", "key": "arg0", "value": "{{Page URL}}"},
+                {"type": "TEMPLATE", "key": "arg1", "value": value}
+            ]
+        }
+    # Add more mappings as needed
+    return {}
+
+def convert_piwik_variable(piwik_var: dict) -> dict:
+    """Convert Piwik Pro variables to GTM variables."""
+    return {
+        "name": piwik_var.get("name", ""),
+        "type": "gas",
+        "parameter": [
+            {"type": "TEMPLATE", "key": "name", "value": piwik_var.get("name", "")},
+            {"type": "TEMPLATE", "key": "value", "value": piwik_var.get("value", "")}
+        ]
+    }
+
 @app.post("/convert")
 async def convert_piwik_gtm(file: UploadFile = File(...)):
-    piwik_json = json.loads(await file.read())
+    try:
+        piwik_data = json.loads(await file.read())
+    except json.JSONDecodeError:
+        raise HTTPException(400, "Invalid JSON file")
 
-    # Extract accountId and containerId safely
-    container_version = piwik_json.get('containerVersion', {})
-    account_id = str(container_version.get('accountId', "0"))
-    container_id = str(container_version.get('containerId', "0"))
+    # Extract container version details
+    container_version = piwik_data.get("containerVersion", {})
+    account_id = container_version.get("accountId", "0")
+    container_id = container_version.get("containerId", "0")
 
-    # Ensure IDs are numeric, otherwise default to "0"
-    if not account_id.isdigit():
+    # Validate IDs (GTM requires numeric values)
+    try:
+        account_id = str(int(account_id))
+        container_id = str(int(container_id))
+    except ValueError:
         account_id = "0"
-    if not container_id.isdigit():
         container_id = "0"
 
-    gtm_json = {
+    # Base GTM structure (matches API v2)
+    gtm_export = {
         "exportFormatVersion": 2,
-        "exportTime": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+        "exportTime": datetime.utcnow().isoformat() + "Z",
         "containerVersion": {
-            "path": f"accounts/{account_id}/containers/{container_id}/versions/0",
             "accountId": account_id,
             "containerId": container_id,
             "containerVersionId": "0",
-            "container": {
-                "path": f"accounts/{account_id}/containers/{container_id}",
-                "accountId": account_id,
-                "containerId": container_id,
-                "name": "Converted Container",
-                "publicId": "GTM-XXXX",
-                "usageContext": ["WEB"]
-            },
             "tag": [],
             "trigger": [],
-            "variable": [
-                {"name": "Page Hostname", "type": "PAGE_HOSTNAME"},
-                {"name": "Page Path", "type": "PAGE_PATH"},
-                {"name": "Page URL", "type": "PAGE_URL"},
-                {"name": "Referrer", "type": "REFERRER"}
-            ],
-            "folder": []
+            "variable": [],
+            "fingerprint": "",
+            "tagManagerUrl": "",
+            "name": "Converted from Piwik Pro",
+            "description": "",
+            "builtInVariable": [
+                {"type": "PAGE_URL"},
+                {"type": "PAGE_HOSTNAME"},
+                {"type": "PAGE_PATH"},
+                {"type": "REFERRER"}
+            ]
         }
     }
 
-    event_type_mapping = {
-        "page_view": "page_view",
-        "click": "click",
-        "form_submit": "form_submission",
-        "history_change": "history_change",
-        "timer": "timer"
-    }
-
-    # Convert Piwik triggers to GTM triggers
-    trigger_mapping = {}
-    for trigger_index, (trigger_id, trigger) in enumerate(piwik_json.get('triggers', {}).items(), start=1):
-        trigger_name = trigger.get('attributes', {}).get('name', f"Trigger {trigger_index}")
-        piwik_event_type = trigger.get("attributes", {}).get("type", "click")  # Default to "click" if unknown
-        gtm_event_type = event_type_mapping.get(piwik_event_type, "click")  # Use only GTM-approved types
-
+    # Convert Triggers (Piwik Pro -> GTM)
+    trigger_id_map = {}
+    for idx, (piwik_trigger_id, piwik_trigger) in enumerate(piwik_data.get("triggers", {}).items(), 1):
+        attributes = piwik_trigger.get("attributes", {})
+        
         gtm_trigger = {
             "accountId": account_id,
             "containerId": container_id,
-            "triggerId": str(trigger_index),
-            "name": trigger_name,
-            "type": gtm_event_type,
-            "filter": []
+            "triggerId": str(idx),
+            "name": attributes.get("name", f"Trigger {idx}"),
+            "type": GTM_EVENT_TYPES.get(attributes.get("type", "pageview"), "pageView"),
+            "filter": [],
+            "customEventFilter": [],
+            "autoEventFilter": []
         }
 
-        gtm_json['containerVersion']['trigger'].append(gtm_trigger)
-        trigger_mapping[trigger_id] = str(trigger_index)
+        # Map Piwik conditions to GTM filters
+        for condition in piwik_trigger.get("conditions", []):
+            if gtm_filter := map_piwik_condition_to_gtm_filter(condition):
+                gtm_trigger["filter"].append(gtm_filter)
 
-    # Convert Piwik tags to GTM tags
-    for tag_index, (tag_id, tag) in enumerate(piwik_json.get('tags', {}).items(), start=1):
-        tag_name = tag['attributes'].get('name', f"Tag {tag_index}")
-        tag_code = tag['attributes'].get('code', '')
+        gtm_export["containerVersion"]["trigger"].append(gtm_trigger)
+        trigger_id_map[piwik_trigger_id] = str(idx)
 
-        # Map Piwik triggers to GTM firing triggers
-        piwik_trigger_ids = tag.get('triggers', [])
-        gtm_firing_triggers = [trigger_mapping.get(tid, "1") for tid in piwik_trigger_ids if tid in trigger_mapping]
-
+    for idx, (piwik_tag_id, piwik_tag) in enumerate(piwik_data.get("tags", {}).items(), 1):
+        attributes = piwik_tag.get("attributes", {})
+        
         gtm_tag = {
             "accountId": account_id,
             "containerId": container_id,
-            "tagId": str(tag_index),
-            "name": tag_name,
+            "tagId": str(idx),
+            "name": attributes.get("name", f"Tag {idx}"),
             "type": "html",
-            "parameter": [{"type": "TEMPLATE", "key": "html", "value": tag_code}],
-            "firingTriggerId": gtm_firing_triggers
+            "parameter": [
+                {"type": "TEMPLATE", "key": "html", "value": attributes.get("code", "")}
+            ],
+            "firingTriggerId": [trigger_id_map[t] for t in piwik_tag.get("triggers", []) if t in trigger_id_map],
+            "tagFiringOption": "oncePerEvent",
+            "monitoringMetadata": {"type": "map"}
         }
 
-        gtm_json['containerVersion']['tag'].append(gtm_tag)
+        gtm_export["containerVersion"]["tag"].append(gtm_tag)
 
-    output_stream = BytesIO()
-    output_stream.write(json.dumps(gtm_json, indent=2).encode())
-    output_stream.seek(0)
+    # Convert Variables
+    for piwik_var in piwik_data.get("variables", []):
+        if gtm_var := convert_piwik_variable(piwik_var):
+            gtm_export["containerVersion"]["variable"].append(gtm_var)
 
-    headers = {'Content-Disposition': 'attachment; filename="converted_gtm.json"'}
-    return StreamingResponse(output_stream, media_type='application/json', headers=headers)
+    # Prepare downloadable JSON
+    output = BytesIO()
+    output.write(json.dumps(gtm_export, indent=2).encode())
+    output.seek(0)
+
+    return StreamingResponse(
+        output,
+        media_type="application/json",
+        headers={"Content-Disposition": "attachment; filename=gtm_export.json"}
+    )
