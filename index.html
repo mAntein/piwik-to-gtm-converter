@@ -1,35 +1,96 @@
 <!DOCTYPE html>
 <html>
+<head>
+  <title>Piwik GTM to GTM JSON Converter</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #0f172a, #1e3a8a);
+      color: white;
+      text-align: center;
+      padding: 50px;
+    }
+    h2 {
+      color: #60a5fa;
+    }
+    form {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 20px;
+      border-radius: 10px;
+      display: inline-block;
+    }
+    input, button {
+      margin: 10px;
+      padding: 10px;
+      border: none;
+      border-radius: 5px;
+      font-size: 16px;
+    }
+    input {
+      background: white;
+      color: black;
+    }
+    button {
+      background: #3b82f6;
+      color: white;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #2563eb;
+    }
+    #download-btn {
+      display: none;
+      background: #22c55e;
+    }
+    #download-btn:hover {
+      background: #16a34a;
+    }
+  </style>
+</head>
 <body>
   <h2>Piwik GTM to GTM JSON Converter</h2>
   <form id="upload-form">
     <input type="file" id="file" accept=".json" required>
     <button type="submit">Convert</button>
   </form>
+  <br>
+  <button id="download-btn">Download Converted File</button>
 
   <script>
+  let convertedFileUrl = "";
+
   document.getElementById('upload-form').onsubmit = async (e) => {
     e.preventDefault();
     const fileInput = document.getElementById('file');
     const formData = new FormData();
     formData.append('file', fileInput.files[0]);
 
-    const res = await fetch('https://piwik-to-gtm-converter.onrender.com/convert', {
-      method: 'POST',
-      body: formData
-    });
+    try {
+      const res = await fetch('https://piwik-to-gtm-converter.onrender.com/convert', {
+        method: 'POST',
+        body: formData
+      });
 
-    if(res.ok) {
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'converted_gtm.json';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-    } else {
-      alert('Conversion failed.');
+      if (res.ok) {
+        const blob = await res.blob();
+        convertedFileUrl = URL.createObjectURL(blob);
+        
+        const downloadBtn = document.getElementById('download-btn');
+        downloadBtn.style.display = 'inline-block';
+        downloadBtn.onclick = () => {
+          const a = document.createElement('a');
+          a.href = convertedFileUrl;
+          a.download = 'converted_gtm.json';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        };
+      } else {
+        const errorText = await res.text();
+        alert('Conversion failed: ' + errorText);
+      }
+    } catch (error) {
+      alert('An error occurred: ' + error.message);
     }
   };
   </script>
