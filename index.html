@@ -1,1 +1,37 @@
+<!DOCTYPE html>
+<html>
+<body>
+  <h2>Piwik GTM to GTM JSON Converter</h2>
+  <form id="upload-form">
+    <input type="file" id="file" accept=".json" required>
+    <button type="submit">Convert</button>
+  </form>
 
+  <script>
+  document.getElementById('upload-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const fileInput = document.getElementById('file');
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+
+    const res = await fetch('https://piwik-to-gtm-converter.onrender.com/convert', {
+      method: 'POST',
+      body: formData
+    });
+
+    if(res.ok) {
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'converted_gtm.json';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } else {
+      alert('Conversion failed.');
+    }
+  };
+  </script>
+</body>
+</html>
