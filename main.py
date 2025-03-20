@@ -9,17 +9,17 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 @app.post("/convert")
-async def convert_piwik_to_gtm(file: UploadFile = File(...)):
+async def convert_piwik_gtm(file: UploadFile = File(...)):
     piwik_json = json.loads(await file.read())
 
-    # Extract accountId and containerId
+    # Extract accountId and containerId safely
     container_version = piwik_json.get('containerVersion', {})
     account_id = str(container_version.get('accountId', "0"))
     container_id = str(container_version.get('containerId', "0"))
@@ -57,14 +57,13 @@ async def convert_piwik_to_gtm(file: UploadFile = File(...)):
         }
     }
 
-    # Map Piwik event types to GTM event types
     event_type_mapping = {
-        "pageview": "pageview",
+        "page_view": "page_view",
         "click": "click",
         "form_submit": "form_submission",
         "history_change": "history_change",
         "timer": "timer",
-        "custom_event": "custom_event"
+        "custom_event": "trigger_group"
     }
 
     # Convert Piwik triggers to GTM triggers
@@ -72,7 +71,7 @@ async def convert_piwik_to_gtm(file: UploadFile = File(...)):
     for trigger_index, (trigger_id, trigger) in enumerate(piwik_json.get('triggers', {}).items(), start=1):
         trigger_name = trigger.get('attributes', {}).get('name', f"Trigger {trigger_index}")
         piwik_event_type = trigger.get("attributes", {}).get("type", "custom_event")
-        gtm_event_type = event_type_mapping.get(piwik_event_type, "custom_event")
+        gtm_event_type = event_type_mapping.get(piwik_event_type, "trigger_group")
 
         gtm_trigger = {
             "accountId": account_id,
@@ -82,22 +81,6 @@ async def convert_piwik_to_gtm(file: UploadFile = File(...)):
             "type": gtm_event_type,
             "filter": []
         }
-
-        conditions = trigger.get("conditions", [])
-        for condition in conditions:
-            variable_name = condition.get("variableName")
-            operator = condition.get("operator")
-            value = condition.get("value")
-
-            if variable_name and operator and value:
-                gtm_trigger["filter"].append({
-                    "type": "condition",
-                    "parameter": [
-                        {"type": "template", "key": "arg0", "value": variable_name},
-                        {"type": "template", "key": "arg1", "value": operator},
-                        {"type": "template", "key": "arg2", "value": value}
-                    ]
-                })
 
         gtm_json['containerVersion']['trigger'].append(gtm_trigger)
         trigger_mapping[trigger_id] = str(trigger_index)
@@ -109,7 +92,7 @@ async def convert_piwik_to_gtm(file: UploadFile = File(...)):
 
         # Map Piwik triggers to GTM firing triggers
         piwik_trigger_ids = tag.get('triggers', [])
-        gtm_firing_triggers = [trigger_mapping.get(tid) for tid in piwik_trigger_ids if tid in trigger_mapping]
+        gtm_firing_triggers = [trigger_mapping.get(tid, "1") for tid in piwik_trigger_ids if tid in trigger_mapping]
 
         gtm_tag = {
             "accountId": account_id,
@@ -117,9 +100,7 @@ async def convert_piwik_to_gtm(file: UploadFile = File(...)):
             "tagId": str(tag_index),
             "name": tag_name,
             "type": "html",
-            "parameter": [
-                {"type": "TEMPLATE", "key": "html", "value": tag_code}
-            ],
+            "parameter": [{"type": "TEMPLATE", "key": "html", "value": tag_code}],
             "firingTriggerId": gtm_firing_triggers
         }
 
