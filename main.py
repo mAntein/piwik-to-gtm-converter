@@ -46,7 +46,12 @@ async def convert_piwik_gtm(file: UploadFile = File(...)):
                 "publicId": "GTM-XXXX",
                 "usageContext": ["WEB"]
             },
-            "tag": [], "trigger": [], "variable": [], "folder": []
+            "tag": [], "trigger": [], "variable": [
+                {"name": "Page Hostname", "type": "PAGE_HOSTNAME"},
+                {"name": "Page Path", "type": "PAGE_PATH"},
+                {"name": "Page URL", "type": "PAGE_URL"},
+                {"name": "Referrer", "type": "REFERRER"}
+            ], "folder": []
         }
     }
 
@@ -57,7 +62,7 @@ async def convert_piwik_gtm(file: UploadFile = File(...)):
             "name": tag['attributes']['name'],
             "type": "html",
             "parameter": [{"type": "TEMPLATE", "key": "html", "value": tag['attributes']['code']}],
-            "firingTriggerId": [str(i + 1) for i in range(len(tag.get('triggers', [])))],
+            "firingTriggerId": [str(trigger_index + 1) for trigger_index, _ in enumerate(tag.get('triggers', []))],
             "tagId": str(index + 1)
         })
 
