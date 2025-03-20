@@ -17,23 +17,21 @@ app.add_middleware(
 
 # GTM Constants
 GTM_EVENT_TYPES = {
-    "pageview": "pageView",
-    "click": "click",
-    "submit": "formSubmit",
-    "history_change": "historyChange",
-    "custom_event": "customEvent"
+    "pageview": "PAGEVIEW",
+    "click": "CLICK",
+    "submit": "FORM_SUBMIT",
+    "history_change": "HISTORY_CHANGE",
+    "custom_event": "CUSTOM_EVENT"
 }
 
-GTM_VARIABLE_TYPES = {
-    "text": "v",
-    "url": "u",
-    "data_layer": "d"
+GTM_TAG_FIRING_OPTIONS = {
+    "once_per_event": "ONCE_PER_EVENT",
+    "once_per_load": "ONCE_PER_LOAD",
+    "unlimited": "UNLIMITED"
 }
 
 def map_piwik_condition_to_gtm_filter(piwik_condition: dict) -> dict:
     """Convert Piwik Pro trigger conditions to GTM filters."""
-    # Example Piwik condition: {"type": "url_contains", "value": "checkout"}
-    # GTM filter format: https://developers.google.com/tag-manager/api/v2/reference/accounts/containers/workspaces/triggers
     condition_type = piwik_condition.get("type", "")
     value = piwik_condition.get("value", "")
     
@@ -113,7 +111,7 @@ async def convert_piwik_gtm(file: UploadFile = File(...)):
             "containerId": container_id,
             "triggerId": str(idx),
             "name": attributes.get("name", f"Trigger {idx}"),
-            "type": GTM_EVENT_TYPES.get(attributes.get("type", "pageview"), "pageView"),
+            "type": GTM_EVENT_TYPES.get(attributes.get("type", "pageview"), "PAGEVIEW"),
             "filter": [],
             "customEventFilter": [],
             "autoEventFilter": []
@@ -127,6 +125,7 @@ async def convert_piwik_gtm(file: UploadFile = File(...)):
         gtm_export["containerVersion"]["trigger"].append(gtm_trigger)
         trigger_id_map[piwik_trigger_id] = str(idx)
 
+    # Convert Tags
     for idx, (piwik_tag_id, piwik_tag) in enumerate(piwik_data.get("tags", {}).items(), 1):
         attributes = piwik_tag.get("attributes", {})
         
@@ -140,7 +139,7 @@ async def convert_piwik_gtm(file: UploadFile = File(...)):
                 {"type": "TEMPLATE", "key": "html", "value": attributes.get("code", "")}
             ],
             "firingTriggerId": [trigger_id_map[t] for t in piwik_tag.get("triggers", []) if t in trigger_id_map],
-            "tagFiringOption": "oncePerEvent",
+            "tagFiringOption": GTM_TAG_FIRING_OPTIONS.get("once_per_event", "ONCE_PER_EVENT"),
             "monitoringMetadata": {"type": "map"}
         }
 
