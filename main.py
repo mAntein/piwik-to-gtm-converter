@@ -58,7 +58,7 @@ async def convert_piwik_gtm(file: UploadFile = File(...)):
             "type": "html",
             "parameter": [{"type": "TEMPLATE", "key": "html", "value": tag['attributes']['code']}],
             "firingTriggerId": tag.get('triggers', []),
-            "tagId": tag_id
+            "tagId": str(abs(hash(tag_id)))[:10]
         })
 
     output_stream = BytesIO()
