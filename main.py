@@ -118,7 +118,7 @@ async def convert_piwik_to_gtm(file: UploadFile = File(...)):
             "name": tag_name,
             "type": "html",
             "parameter": [
-                {"type": "template", "key": "html", "value": tag_code}
+                {"type": "TEMPLATE", "key": "html", "value": tag_code}
             ],
             "firingTriggerId": gtm_firing_triggers
         }
