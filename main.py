@@ -62,16 +62,15 @@ async def convert_piwik_gtm(file: UploadFile = File(...)):
         "click": "click",
         "form_submit": "form_submission",
         "history_change": "history_change",
-        "timer": "timer",
-        "custom_event": "trigger_group"
+        "timer": "timer"
     }
 
     # Convert Piwik triggers to GTM triggers
     trigger_mapping = {}
     for trigger_index, (trigger_id, trigger) in enumerate(piwik_json.get('triggers', {}).items(), start=1):
         trigger_name = trigger.get('attributes', {}).get('name', f"Trigger {trigger_index}")
-        piwik_event_type = trigger.get("attributes", {}).get("type", "custom_event")
-        gtm_event_type = event_type_mapping.get(piwik_event_type, "trigger_group")
+        piwik_event_type = trigger.get("attributes", {}).get("type", "click")  # Default to "click" if unknown
+        gtm_event_type = event_type_mapping.get(piwik_event_type, "click")  # Use only GTM-approved types
 
         gtm_trigger = {
             "accountId": account_id,
@@ -106,6 +105,7 @@ async def convert_piwik_gtm(file: UploadFile = File(...)):
 
         gtm_json['containerVersion']['tag'].append(gtm_tag)
 
+    # Prepare JSON for download
     output_stream = BytesIO()
     output_stream.write(json.dumps(gtm_json, indent=2).encode())
     output_stream.seek(0)
