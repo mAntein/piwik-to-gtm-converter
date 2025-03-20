@@ -86,13 +86,25 @@ async def convert_piwik_gtm(file: UploadFile = File(...)):
     trigger_id_map = {}
     for idx, (piwik_trigger_id, piwik_trigger) in enumerate(piwik_data.get("triggers", {}).items(), 1):
         attributes = piwik_trigger.get("attributes", {})
+        filters = []
+        for condition in piwik_trigger.get("conditions", []):
+            condition_type = condition.get("type", "")
+            value = condition.get("value", "")
+            if condition_type == "url_contains":
+                filters.append({
+                    "type": "CONTAINS",
+                    "parameter": [
+                        {"type": "TEMPLATE", "key": "arg0", "value": "{{Page URL}}"},
+                        {"type": "TEMPLATE", "key": "arg1", "value": value}
+                    ]
+                })
         gtm_trigger = {
             "accountId": account_id,
             "containerId": container_id,
             "triggerId": str(idx),
             "name": attributes.get("name", f"Trigger {idx}"),
             "type": GTM_EVENT_TYPES.get(attributes.get("type", "click"), "CLICK"),
-            "filter": []
+            "filter": filters
         }
         gtm_export["containerVersion"]["trigger"].append(gtm_trigger)
         trigger_id_map[piwik_trigger_id] = str(idx)
