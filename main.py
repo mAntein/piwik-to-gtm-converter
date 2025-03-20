@@ -30,6 +30,15 @@ GTM_TAG_FIRING_OPTIONS = {
     "unlimited": "UNLIMITED"
 }
 
+GTM_PARAMETER_TYPES = {
+    "template": "TEMPLATE",
+    "map": "MAP",
+    "list": "LIST",
+    "boolean": "BOOLEAN",
+    "integer": "INTEGER",
+    "string": "TEMPLATE"
+}
+
 def map_piwik_condition_to_gtm_filter(piwik_condition: dict) -> dict:
     """Convert Piwik Pro trigger conditions to GTM filters."""
     condition_type = piwik_condition.get("type", "")
@@ -45,17 +54,6 @@ def map_piwik_condition_to_gtm_filter(piwik_condition: dict) -> dict:
         }
     return {}
 
-def convert_piwik_variable(piwik_var: dict) -> dict:
-    """Convert Piwik Pro variables to GTM variables."""
-    return {
-        "name": piwik_var.get("name", ""),
-        "type": "gas",
-        "parameter": [
-            {"type": "TEMPLATE", "key": "name", "value": piwik_var.get("name", "")},
-            {"type": "TEMPLATE", "key": "value", "value": piwik_var.get("value", "")}
-        ]
-    }
-
 @app.post("/convert")
 async def convert_piwik_gtm(file: UploadFile = File(...)):
     try:
@@ -63,7 +61,6 @@ async def convert_piwik_gtm(file: UploadFile = File(...)):
     except json.JSONDecodeError:
         raise HTTPException(400, "Invalid JSON file")
 
-    # Extract container version details
     container_version = piwik_data.get("containerVersion", {})
     account_id = container_version.get("accountId", "0")
     container_id = container_version.get("containerId", "0")
@@ -113,7 +110,6 @@ async def convert_piwik_gtm(file: UploadFile = File(...)):
             "autoEventFilter": []
         }
 
-        # Map Piwik conditions to GTM filters
         for condition in piwik_trigger.get("conditions", []):
             if gtm_filter := map_piwik_condition_to_gtm_filter(condition):
                 gtm_trigger["filter"].append(gtm_filter)
@@ -123,6 +119,15 @@ async def convert_piwik_gtm(file: UploadFile = File(...)):
 
     for idx, (piwik_tag_id, piwik_tag) in enumerate(piwik_data.get("tags", {}).items(), 1):
         attributes = piwik_tag.get("attributes", {})
+        parameters = []
+
+        for param in attributes.get("parameters", []):
+            param_type = GTM_PARAMETER_TYPES.get(param.get("type", "TEMPLATE"), "TEMPLATE")
+            parameters.append({
+                "type": param_type,
+                "key": param.get("key", ""),
+                "value": param.get("value", "")
+            })
         
         gtm_tag = {
             "accountId": account_id,
@@ -130,9 +135,7 @@ async def convert_piwik_gtm(file: UploadFile = File(...)):
             "tagId": str(idx),
             "name": attributes.get("name", f"Tag {idx}"),
             "type": "html",
-            "parameter": [
-                {"type": "TEMPLATE", "key": "html", "value": attributes.get("code", "")}
-            ],
+            "parameter": parameters,
             "firingTriggerId": [trigger_id_map[t] for t in piwik_tag.get("triggers", []) if t in trigger_id_map],
             "tagFiringOption": GTM_TAG_FIRING_OPTIONS.get("once_per_event", "ONCE_PER_EVENT"),
             "monitoringMetadata": {}
@@ -140,12 +143,6 @@ async def convert_piwik_gtm(file: UploadFile = File(...)):
 
         gtm_export["containerVersion"]["tag"].append(gtm_tag)
 
-    # Convert Variables
-    for piwik_var in piwik_data.get("variables", []):
-        if gtm_var := convert_piwik_variable(piwik_var):
-            gtm_export["containerVersion"]["variable"].append(gtm_var)
-
-    # Prepare downloadable JSON
     output = BytesIO()
     output.write(json.dumps(gtm_export, indent=2).encode())
     output.seek(0)
