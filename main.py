@@ -50,7 +50,7 @@ async def convert_piwik_gtm(file: UploadFile = File(...)):
             "containerId": container_id,
             "name": tag['attributes']['name'],
             "type": "html",
-            "parameter": [{"type": "template", "key": "html", "value": tag['attributes']['code']}],
+            "parameter": [{"type": "text", "key": "html", "value": tag['attributes']['code']}],
             "firingTriggerId": tag.get('triggers', []),
             "tagId": tag_id
         })
