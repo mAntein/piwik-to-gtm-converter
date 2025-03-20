@@ -24,6 +24,7 @@ async def convert_piwik_gtm(file: UploadFile = File(...)):
     account_id = str(container_version.get('accountId', "0"))
     container_id = str(container_version.get('containerId', "0"))
 
+    # Ensure IDs are numeric, otherwise default to "0"
     if not account_id.isdigit():
         account_id = "0"
     if not container_id.isdigit():
@@ -105,7 +106,6 @@ async def convert_piwik_gtm(file: UploadFile = File(...)):
 
         gtm_json['containerVersion']['tag'].append(gtm_tag)
 
-    # Prepare JSON for download
     output_stream = BytesIO()
     output_stream.write(json.dumps(gtm_json, indent=2).encode())
     output_stream.seek(0)
